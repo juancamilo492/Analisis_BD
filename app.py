@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import openai
 from datetime import datetime
 import os
@@ -105,14 +106,17 @@ def identificar_clientes_potenciales(df):
     # Crear una copia para trabajar
     df_trabajo = df.copy()
     
+    # Asegurar que CIIU sea string
+    df_trabajo['CIIU'] = df_trabajo['CIIU'].astype(str)
+    
     # Identificar empresas con CIIU objetivo
     df_trabajo['ES_CLIENTE_POTENCIAL'] = df_trabajo['CIIU'].apply(
-        lambda x: any(str(x).startswith(codigo) for codigo in CIIU_OBJETIVO.keys()) if pd.notna(x) else False
+        lambda x: any(str(x).startswith(codigo) for codigo in CIIU_OBJETIVO.keys()) if pd.notna(x) and x != 'nan' else False
     )
     
     # Extraer código CIIU base
     df_trabajo['CIIU_BASE'] = df_trabajo['CIIU'].apply(
-        lambda x: str(x)[:4] if pd.notna(x) else ''
+        lambda x: str(x)[:4] if pd.notna(x) and x != 'nan' else ''
     )
     
     # Calcular métricas financieras
@@ -128,6 +132,11 @@ def identificar_clientes_potenciales(df):
     df_trabajo['RATIO_ENDEUDAMIENTO'] = (
         df_trabajo['PASIVOS_2024'] / df_trabajo['ACTIVOS_2024'] * 100
     ).round(2)
+    
+    # Reemplazar infinitos y NaN con 0
+    df_trabajo['CRECIMIENTO_INGRESOS'] = df_trabajo['CRECIMIENTO_INGRESOS'].replace([np.inf, -np.inf], 0).fillna(0)
+    df_trabajo['MARGEN_GANANCIA_2024'] = df_trabajo['MARGEN_GANANCIA_2024'].replace([np.inf, -np.inf], 0).fillna(0)
+    df_trabajo['RATIO_ENDEUDAMIENTO'] = df_trabajo['RATIO_ENDEUDAMIENTO'].replace([np.inf, -np.inf], 0).fillna(0)
     
     return df_trabajo
 
@@ -326,7 +335,87 @@ def main():
         # Filtros en sidebar
         st.sidebar.subheader("Filtros de Búsqueda")
         
+        # Filtro por CIIU
+        st.sidebar.subheader("🔍 Filtro por Código CIIU")
+        
+        # Opción de búsqueda o selección
+        filtro_ciiu_modo = st.sidebar.radio(
+            "Modo de selección CIIU:",
+            ["Clientes Potenciales Predefinidos", "Búsqueda Personalizada", "Selección Manual"]
+        )
+        
+        ciiu_seleccionados = []
+        
+        if filtro_ciiu_modo == "Clientes Potenciales Predefinidos":
+            # Mostrar solo los CIIU objetivo predefinidos
+            st.sidebar.info("Códigos CIIU de industrias objetivo para empaques")
+            usar_predefinidos = st.sidebar.checkbox("Usar todos los códigos predefinidos", value=True)
+            
+            if usar_predefinidos:
+                ciiu_seleccionados = list(CIIU_OBJETIVO.keys())
+            else:
+                for codigo, descripcion in CIIU_OBJETIVO.items():
+                    if st.sidebar.checkbox(f"{codigo}: {descripcion}", value=True, key=f"ciiu_{codigo}"):
+                        ciiu_seleccionados.append(codigo)
+        
+        elif filtro_ciiu_modo == "Búsqueda Personalizada":
+            # Búsqueda por texto en CIIU
+            busqueda_ciiu = st.sidebar.text_input(
+                "Buscar código CIIU (ej: C101, G463)",
+                placeholder="Ingrese código CIIU..."
+            )
+            
+            if busqueda_ciiu:
+                # Buscar coincidencias
+                df_ciiu_match = df[df['CIIU'].astype(str).str.contains(busqueda_ciiu.upper(), na=False)]
+                ciiu_encontrados = df_ciiu_match['CIIU'].unique()
+                
+                if len(ciiu_encontrados) > 0:
+                    st.sidebar.success(f"Se encontraron {len(ciiu_encontrados)} códigos CIIU")
+                    ciiu_seleccionados = [str(ciiu) for ciiu in ciiu_encontrados]
+                    
+                    # Mostrar los CIIU encontrados
+                    with st.sidebar.expander("Ver códigos encontrados"):
+                        for ciiu in ciiu_encontrados[:10]:  # Mostrar máximo 10
+                            st.write(f"• {ciiu}")
+                        if len(ciiu_encontrados) > 10:
+                            st.write(f"... y {len(ciiu_encontrados) - 10} más")
+                else:
+                    st.sidebar.warning("No se encontraron códigos CIIU con ese criterio")
+        
+        else:  # Selección Manual
+            # Obtener todos los CIIU únicos
+            todos_ciiu = sorted(df['CIIU'].dropna().unique())
+            
+            # Agrupar por los primeros 4 caracteres
+            ciiu_grupos = {}
+            for ciiu in todos_ciiu:
+                grupo = str(ciiu)[:4]
+                if grupo not in ciiu_grupos:
+                    ciiu_grupos[grupo] = []
+                ciiu_grupos[grupo].append(str(ciiu))
+            
+            # Mostrar por grupos para mejor organización
+            st.sidebar.info(f"Total de códigos CIIU únicos: {len(todos_ciiu)}")
+            
+            # Selector de grupos
+            grupos_seleccionados = st.sidebar.multiselect(
+                "Seleccionar grupos CIIU:",
+                options=sorted(ciiu_grupos.keys()),
+                default=list(CIIU_OBJETIVO.keys())
+            )
+            
+            # Mostrar checkboxes para los CIIU de los grupos seleccionados
+            if grupos_seleccionados:
+                with st.sidebar.expander("Seleccionar códigos específicos"):
+                    for grupo in grupos_seleccionados:
+                        st.write(f"**Grupo {grupo}:**")
+                        for ciiu in ciiu_grupos[grupo]:
+                            if st.checkbox(ciiu, value=True, key=f"manual_{ciiu}"):
+                                ciiu_seleccionados.append(ciiu)
+        
         # Filtro por macrosector
+        st.sidebar.subheader("📊 Otros Filtros")
         macrosectores = ['Todos'] + sorted(df['MACROSECTOR'].unique().tolist())
         macrosector_sel = st.sidebar.selectbox("Macrosector", macrosectores)
         
@@ -335,12 +424,20 @@ def main():
         depto_sel = st.sidebar.selectbox("Departamento", departamentos)
         
         # Filtro por rango de ingresos
-        st.sidebar.subheader("Rango de Ingresos 2024 (millones)")
+        st.sidebar.subheader("💰 Rango de Ingresos 2024 (millones)")
         ingresos_min = st.sidebar.number_input("Mínimo", value=0, step=1000)
         ingresos_max = st.sidebar.number_input("Máximo", value=int(df['INGRESOS_2024'].max()/1000), step=1000)
         
         # Aplicar filtros
-        df_filtrado = df[df['ES_CLIENTE_POTENCIAL']].copy()
+        if filtro_ciiu_modo == "Clientes Potenciales Predefinidos" and usar_predefinidos:
+            # Usar el filtro original de ES_CLIENTE_POTENCIAL
+            df_filtrado = df[df['ES_CLIENTE_POTENCIAL']].copy()
+        else:
+            # Aplicar filtro por CIIU seleccionados
+            if ciiu_seleccionados:
+                df_filtrado = df[df['CIIU'].astype(str).isin(ciiu_seleccionados)].copy()
+            else:
+                df_filtrado = df.copy()
         
         if macrosector_sel != 'Todos':
             df_filtrado = df_filtrado[df_filtrado['MACROSECTOR'] == macrosector_sel]
@@ -352,6 +449,15 @@ def main():
             (df_filtrado['INGRESOS_2024'] >= ingresos_min * 1000) & 
             (df_filtrado['INGRESOS_2024'] <= ingresos_max * 1000)
         ]
+        
+        # Mostrar estadísticas de filtros aplicados
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("📊 Resumen de Filtros")
+        st.sidebar.info(f"""
+        **CIIU seleccionados:** {len(ciiu_seleccionados)}  
+        **Empresas encontradas:** {len(df_filtrado)}  
+        **% del total:** {len(df_filtrado)/len(df)*100:.1f}%
+        """)
         
         # Mostrar resultados
         st.header("🎯 Clientes Potenciales Identificados")
@@ -452,9 +558,46 @@ def main():
         
         # Sección de información adicional
         with st.expander("ℹ️ Información sobre Códigos CIIU"):
-            st.write("**Códigos CIIU objetivo para la industria de empaques:**")
-            for codigo, descripcion in CIIU_OBJETIVO.items():
-                st.write(f"• **{codigo}**: {descripcion}")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.write("**Códigos CIIU objetivo para la industria de empaques:**")
+                for codigo, descripcion in list(CIIU_OBJETIVO.items())[:len(CIIU_OBJETIVO)//2]:
+                    st.write(f"• **{codigo}**: {descripcion}")
+            
+            with col2:
+                st.write("** **")  # Espacio para alinear
+                for codigo, descripcion in list(CIIU_OBJETIVO.items())[len(CIIU_OBJETIVO)//2:]:
+                    st.write(f"• **{codigo}**: {descripcion}")
+            
+            st.markdown("---")
+            st.write("**Cómo usar los filtros CIIU:**")
+            st.write("""
+            1. **Clientes Potenciales Predefinidos**: Usa los códigos CIIU ya identificados como relevantes para empaques
+            2. **Búsqueda Personalizada**: Busca códigos CIIU específicos por texto (ej: 'C101' o 'G46')
+            3. **Selección Manual**: Explora y selecciona de todos los códigos CIIU disponibles en la base de datos
+            """)
+        
+        # Análisis adicional de CIIU
+        with st.expander("📊 Análisis de Códigos CIIU en la Base de Datos"):
+            # Estadísticas de CIIU
+            ciiu_stats = df['CIIU'].value_counts().head(20)
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.subheader("Top 20 Códigos CIIU más frecuentes")
+                st.dataframe(
+                    ciiu_stats.to_frame().reset_index().rename(
+                        columns={'index': 'Código CIIU', 'CIIU': 'Cantidad de Empresas'}
+                    ),
+                    hide_index=True
+                )
+            
+            with col2:
+                st.subheader("Distribución por Grupo CIIU")
+                df['CIIU_GRUPO'] = df['CIIU'].astype(str).str[:1]
+                grupo_stats = df['CIIU_GRUPO'].value_counts()
+                st.bar_chart(grupo_stats)
         
         # Footer
         st.markdown("---")
