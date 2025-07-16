@@ -4,3 +4,4 @@ openai
 openpyxl
 reportlab
 python-dateutil
+numpy
