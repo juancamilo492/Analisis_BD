@@ -1,1 +1,6 @@
 streamlit
+pandas
+openai
+openpyxl
+reportlab
+python-dateutil
