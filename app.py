@@ -305,6 +305,128 @@ def generar_pdf(empresas_seleccionadas):
 
 # Interfaz principal de Streamlit
 def main():
+    st.markdown("""
+    <style>
+        /* General app styling */
+        .stApp {
+            background-color: #f0f4f8;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', sans-serif;
+            color: #1a1a1a;
+        }
+
+        /* Main header styling */
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #000F9F 0%, #40B4E5 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-align: center;
+            padding: 1rem 0;
+            letter-spacing: -0.02em;
+        }
+
+        /* Subheader styling */
+        h3 {
+            color: #000F9F;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Metric card styling */
+        .stMetric {
+            background-color: #ffffff;
+            padding: 1rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0, 15, 159, 0.1);
+            border-left: 4px solid #DB9500;
+            transition: transform 0.2s ease-in-out;
+        }
+        .stMetric:hover {
+            transform: translateY(-2px);
+        }
+
+        /* Sidebar styling */
+        .css-1d391kg {
+            background-color: #000F9F;
+            color: #ffffff;
+        }
+        .css-1d391kg .stButton > button {
+            background-color: #DB9500;
+            color: #ffffff;
+            border-radius: 8px;
+            font-weight: 500;
+            padding: 0.5rem 1rem;
+            transition: background-color 0.2s ease-in-out;
+        }
+        .css-1d391kg .stButton > button:hover {
+            background-color: #b87a00;
+        }
+
+        /* General button styling */
+        .stButton > button {
+            background-color: #40B4E5;
+            color: #ffffff;
+            border-radius: 8px;
+            padding: 0.5rem 1rem;
+            font-weight: 500;
+            transition: background-color 0.2s ease-in-out;
+        }
+        .stButton > button:hover {
+            background-color: #2a8bb8;
+        }
+
+        /* Dataframe styling */
+        .stDataFrame {
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .stDataFrame table {
+            border-collapse: collapse;
+            background-color: #ffffff;
+            box-shadow: 0 2px 8px rgba(0, 15, 159, 0.05);
+        }
+        .stDataFrame th, .stDataFrame td {
+            padding: 0.5rem;
+            border: 1px solid #e0e7ff;
+        }
+        .stDataFrame th {
+            background-color: #40B4E5;
+            color: #ffffff;
+        }
+
+        /* Expander styling */
+        .stExpander {
+            border: 1px solid #e0e7ff;
+            border-radius: 8px;
+            background-color: #ffffff;
+            box-shadow: 0 1px 4px rgba(0, 15, 159, 0.05);
+        }
+        .stExpander:hover {
+            box-shadow: 0 2px 6px rgba(0, 15, 159, 0.1);
+        }
+
+        /* Tab styling */
+        .stTabs [data-baseweb="tab"] {
+            background-color: #ffffff;
+            border-radius: 8px 8px 0 0;
+            color: #000F9F;
+            font-weight: 500;
+        }
+        .stTabs [data-baseweb="tab"][aria-selected="true"] {
+            background-color: #DB9500;
+            color: #ffffff;
+        }
+
+        /* Divider styling */
+        .stDivider {
+            background-color: #40B4E5;
+            height: 2px;
+            margin: 1rem 0;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
     # Sidebar con filtros
     st.sidebar.header("⚙️ Configuración y Filtros")
     
